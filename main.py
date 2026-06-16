@@ -2,6 +2,11 @@ import os
 import urllib.parse
 import flet as ft
 
+try:
+    import flet_video as ftv
+except Exception:
+    ftv = None
+
 IMAGE_FIT_CONTAIN = "contain"
 IMAGE_FIT_COVER   = "cover"
 
@@ -112,23 +117,33 @@ def main(page: ft.Page):
     def find_reflection_video():
         if not os.path.isdir(_assets_dir):
             return ""
-        for f in os.listdir(_assets_dir):
-            if "reflection" in f.lower() and f.lower().endswith((".mp4", ".webm", ".mov")):
-                return f
-        return ""
+        # Prefer .mp4/.webm (broadly browser-compatible) over .mov,
+        # since iPhone .MOV files are often HEVC-encoded and many
+        # browsers (e.g. Chrome) cannot play HEVC in <video>.
+        candidates = [f for f in os.listdir(_assets_dir)
+                      if "reflection" in f.lower() and f.lower().endswith((".mp4", ".webm", ".mov"))]
+        if not candidates:
+            return ""
+        candidates.sort(key=lambda f: 0 if f.lower().endswith((".mp4", ".webm")) else 1)
+        return candidates[0]
 
     REFLECTION_VIDEO_FILE = find_reflection_video()
-    REFLECTION_VIDEO_SRC  = ("/" + urllib.parse.quote(REFLECTION_VIDEO_FILE)) if REFLECTION_VIDEO_FILE else ""
+    # NOTE: use the plain filename, same convention as every other asset
+    # reference in this file (e.g. ft.Image(src="unam logo.jpeg")).
+    # Flet's web server resolves these relative to assets_dir automatically.
+    # A leading "/" or manual urllib.parse.quote() here can break resolution.
+    REFLECTION_VIDEO_SRC  = REFLECTION_VIDEO_FILE if REFLECTION_VIDEO_FILE else ""
     # NOTE: ft.Video / ft.VideoMedia require the `flet-video` package.
-    # Install with:  pip install flet-video --break-system-packages
+    # Install with:  pip install flet-video
     # If not installed, the player below will raise an AttributeError —
     # see fallback handling in the blog page section.
-    HAS_VIDEO_WIDGET = hasattr(ft, "Video") and hasattr(ft, "VideoMedia")
+    HAS_VIDEO_WIDGET = ftv is not None
 
     # ── DEBUG: print to terminal so you can see exactly what was found ────────
     print(f"\n[DEBUG] assets dir : {_assets_dir}")
     print(f"[DEBUG] files found: {os.listdir(_assets_dir) if os.path.isdir(_assets_dir) else 'DIR NOT FOUND'}")
-    print(f"[DEBUG] evidence   : '{GITHUB_EVIDENCE_FILE}'\n")
+    print(f"[DEBUG] evidence   : '{GITHUB_EVIDENCE_FILE}'")
+    print(f"[DEBUG] reflection : '{REFLECTION_VIDEO_FILE}' -> src='{REFLECTION_VIDEO_SRC}' (video widget available: {HAS_VIDEO_WIDGET})\n")
 
     # Pre-encode the evidence image as base64 so it always works in web mode
     GITHUB_EVIDENCE_SRC = asset_b64(GITHUB_EVIDENCE_FILE)
@@ -1353,16 +1368,28 @@ def main(page: ft.Page):
                                 size=14, color=MUTED, style=ft.TextStyle(italic=True),
                             ),
                             ft.Container(
-                                height=400,
+                                height=640,
                                 border_radius=8,
-                                bgcolor=PANEL_2,
+                                bgcolor="#05080A",
+                                border=ft.Border(
+                                    left=ft.BorderSide(1, LINE),
+                                    top=ft.BorderSide(1, LINE),
+                                    right=ft.BorderSide(1, LINE),
+                                    bottom=ft.BorderSide(1, LINE),
+                                ),
                                 alignment=ft.Alignment(0, 0),
-                                content=ft.Video(
-                                    playlist=[ft.VideoMedia(REFLECTION_VIDEO_SRC)],
-                                    autoplay=False,
-                                    show_controls=True,
-                                    aspect_ratio=16 / 9,
-                                    fill_color=PANEL_2,
+                                content=ft.Container(
+                                    width=320,
+                                    height=568,
+                                    bgcolor="#05080A",
+                                    alignment=ft.Alignment(0, 0),
+                                    content=ftv.Video(
+                                        playlist=[ftv.VideoMedia(REFLECTION_VIDEO_SRC)],
+                                        autoplay=False,
+                                        show_controls=True,
+                                        aspect_ratio=9 / 16,
+                                        fill_color="#05080A",
+                                    ),
                                 ) if (REFLECTION_VIDEO_SRC and HAS_VIDEO_WIDGET) else ft.Column(
                                     [
                                         ft.Icon(ft.Icons.VIDEOCAM_OUTLINED, color=MUTED, size=40),
